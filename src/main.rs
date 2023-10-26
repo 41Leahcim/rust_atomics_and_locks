@@ -10,8 +10,6 @@ fn main() {
 }
 
 fn f() {
-    println!("Hello from another thread!");
-
     let id = thread::current().id();
-    println!("This is my thread id: {id:?}");
+    println!("Hello from another thread\nThis is my thread id: {id:?}");
 }
