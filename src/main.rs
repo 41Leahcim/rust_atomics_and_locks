@@ -1,12 +1,12 @@
 use std::thread;
 
 fn main() {
-    let t1 = thread::spawn(f);
-    let t2 = thread::spawn(f);
+    let threads = (0..2).map(|_| thread::spawn(f)).collect::<Vec<_>>();
 
     println!("Hello from the main thread.");
-    t1.join().unwrap();
-    t2.join().unwrap();
+    threads
+        .into_iter()
+        .for_each(|thread| thread.join().unwrap());
 }
 
 fn f() {
