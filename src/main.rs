@@ -3,13 +3,17 @@ use std::thread;
 fn main() {
     let numbers = Vec::from_iter(0..=1_000);
 
-    let average = thread::spawn(move || {
-        let length = numbers.len();
-        let sum = numbers.iter().sum::<usize>();
-        sum / length
-    })
-    .join()
-    .unwrap();
+    thread::scope(|scope| {
+        scope.spawn(|| {
+            println!("Length: {}", numbers.len());
+        });
 
-    println!("Average: {average}");
+        scope.spawn(|| {
+            // Only iterate over &numbers or numbers.iter().
+            // Mutation and ownership are not allowed, because another thread is using numbers.
+            for n in &numbers {
+                println!("{n}");
+            }
+        });
+    });
 }
