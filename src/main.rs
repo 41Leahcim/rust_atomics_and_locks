@@ -1,13 +1,10 @@
-// A thread unsafe reference counter
-use std::rc::Rc;
+use std::{sync::Arc, thread};
 
 fn main() {
-    // Create a new reference counter
-    let a = Rc::new([1, 2, 3]);
-
-    // Cloning a reference counter, will increase the reference count.
+    // Thread safe reference counter
+    let a = Arc::new([1, 2, 3]);
     let b = a.clone();
 
-    // Both reference counters point to the same memory.
-    assert_eq!(a.as_ptr(), b.as_ptr());
+    thread::spawn(move || dbg!(a));
+    thread::spawn(move || dbg!(b));
 }
