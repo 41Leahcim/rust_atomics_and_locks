@@ -1,13 +1,15 @@
 use std::thread;
 
 fn main() {
-    let numbers = [1, 2, 3];
+    let numbers = Vec::from_iter(0..=1_000);
 
-    thread::spawn(move || {
-        for number in numbers {
-            println!("{number}");
-        }
+    let average = thread::spawn(move || {
+        let length = numbers.len();
+        let sum = numbers.iter().sum::<usize>();
+        sum / length
     })
     .join()
     .unwrap();
+
+    println!("Average: {average}");
 }
