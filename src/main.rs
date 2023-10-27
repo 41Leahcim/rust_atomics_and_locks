@@ -5,6 +5,7 @@ fn main() {
     let a = Arc::new([1, 2, 3]);
     let b = a.clone();
 
-    thread::spawn(move || dbg!(a));
-    thread::spawn(move || dbg!(b));
+    let t1 = thread::spawn(move || dbg!(b));
+    dbg!(a);
+    t1.join().unwrap();
 }
