@@ -1,29 +1,30 @@
-use std::{fmt::Debug, ops::AddAssign};
+use std::{env::args, io};
 
 fn main() {
-    let a = 0;
-    let mut b = 0;
-    f(&a, &mut b);
-}
+    // Read an index
+    let index: usize = args()
+        .nth(1)
+        .as_deref()
+        .map_or_else(
+            || {
+                let mut buffer = String::new();
+                eprint!("Enter a number between 0 and 2 inclusive: ");
+                io::stdin().read_line(&mut buffer).unwrap();
+                buffer.trim().parse()
+            },
+            str::parse,
+        )
+        .unwrap();
 
-fn x() {}
+    // Make sure the index is between 0 and 2 inclusive, as the index won't be checked
+    let index = index.clamp(0, 2);
 
-fn f<T: AddAssign<T> + PartialEq + Copy>(a: &T, b: &mut T)
-where
-    i32: TryInto<T>,
-    <i32 as std::convert::TryInto<T>>::Error: Debug,
-{
-    // Assign before the value of a
-    let before = *a;
+    // Create the data
+    let a = [123, 456, 789];
 
-    // Subtract 1 from the value of b
-    *b += 1.try_into().unwrap();
+    // Get the requested element
+    let b = unsafe { a.get_unchecked(index) };
 
-    // Assign after the value of a
-    let after = *a;
-
-    // The value of a can't have changed because of the immutable reference and borrow checker
-    if before != after {
-        x();
-    }
+    // Print the requested element
+    println!("{b}");
 }
