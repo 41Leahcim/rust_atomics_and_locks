@@ -1,25 +1,29 @@
-use std::{sync::Mutex, thread, time::Duration};
+use std::sync::{Arc, Mutex};
+
+fn process_item<T>(_item: T) {}
+
+fn do_something() {}
 
 fn main() {
-    let n = Mutex::new(0);
-    thread::scope(|s| {
-        for _ in 0..10 {
-            s.spawn(|| {
-                // Lock the mutex, other threads won't have access to it
-                let mut guard = n.lock().unwrap();
+    let list = Arc::new(Mutex::new(vec![3, 2]));
 
-                // Add 100 times to the value in it
-                for _ in 0..100 {
-                    *guard += 1;
-                }
+    // Lock the mutex, add 1 element, and unlock the mutex again in 1 statement
+    // Lock will return an error if the mutex is poisoned
+    list.lock().unwrap().push(1);
 
-                // Drop the guard early, unlocking the mutex
-                drop(guard);
+    // Pop an element from the list, the mutex will be locked until the end of the if let statement
+    if let Some(item) = list.clone().lock().unwrap().pop() {
+        process_item(item);
+    }
 
-                // This sleep will now only increase run-time by a second
-                thread::sleep(Duration::from_secs(1));
-            });
-        }
-    });
-    assert_eq!(n.into_inner().unwrap(), 1000);
+    // Mutex immediately released after the condition
+    if list.lock().unwrap().pop() == Some(2) {
+        do_something();
+    }
+
+    // Mutex will be unlocked after this statement
+    let item = list.lock().unwrap().pop();
+    if let Some(item) = item {
+        process_item(item);
+    }
 }
