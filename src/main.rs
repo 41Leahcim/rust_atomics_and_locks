@@ -1,29 +1,27 @@
-use std::sync::{Arc, Mutex};
-
-fn process_item<T>(_item: T) {}
-
-fn do_something() {}
+use std::{collections::VecDeque, sync::Mutex, thread, time::Duration};
 
 fn main() {
-    let list = Arc::new(Mutex::new(vec![3, 2]));
+    let queue = Mutex::new(VecDeque::new());
 
-    // Lock the mutex, add 1 element, and unlock the mutex again in 1 statement
-    // Lock will return an error if the mutex is poisoned
-    list.lock().unwrap().push(1);
+    thread::scope(|s| {
+        // Consuming thread
+        let t = s.spawn(|| loop {
+            // Try to retrieve an item from the VecDeque
+            let item = queue.lock().unwrap().pop_front();
 
-    // Pop an element from the list, the mutex will be locked until the end of the if let statement
-    if let Some(item) = list.clone().lock().unwrap().pop() {
-        process_item(item);
-    }
+            // Print it if something was returned, park otherwise
+            if let Some(item) = item {
+                dbg!(item);
+            } else {
+                thread::park();
+            }
+        });
 
-    // Mutex immediately released after the condition
-    if list.lock().unwrap().pop() == Some(2) {
-        do_something();
-    }
-
-    // Mutex will be unlocked after this statement
-    let item = list.lock().unwrap().pop();
-    if let Some(item) = item {
-        process_item(item);
-    }
+        // Producing thread
+        for i in 0.. {
+            queue.lock().unwrap().push_back(i);
+            t.thread().unpark();
+            thread::sleep(Duration::from_secs(1));
+        }
+    })
 }
