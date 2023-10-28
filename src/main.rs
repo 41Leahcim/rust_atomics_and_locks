@@ -13,6 +13,10 @@ fn main() {
                     *guard += 1;
                 }
 
+                // Wait a second, increasing the total run-time by the number of threads in seconds
+                // So 10 seconds
+                thread::sleep(Duration::from_secs(1));
+
                 // The mutex will only be unlocked after the current scope (here)
             });
         }
