@@ -1,5 +1,11 @@
 use std::{env::args, io};
 
+fn x() {}
+fn y() {}
+fn z(index: usize) {
+    println!("{index}")
+}
+
 fn main() {
     // Read an index
     let index: usize = args()
@@ -18,6 +24,13 @@ fn main() {
 
     // Make sure the index is between 0 and 2 inclusive, as the index won't be checked
     let index = index.clamp(0, 2);
+
+    // Index 3 could execute code that has been optimized away, causing unpredictable behaviour.
+    match index {
+        0 => x(),
+        1 => y(),
+        _ => z(index),
+    }
 
     // Create the data
     let a = [123, 456, 789];
