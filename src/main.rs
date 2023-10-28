@@ -1,19 +1,21 @@
-use std::{cell::Cell, marker::PhantomData};
+use std::{sync::Mutex, thread, time::Duration};
 
-// Structs with Cells aren't Sync, but they are send
-struct _NotSyncIsSend {
-    _handle: i32,
-    _not_sync: PhantomData<Cell<()>>,
+fn main() {
+    let n = Mutex::new(0);
+    thread::scope(|s| {
+        for _ in 0..10 {
+            s.spawn(|| {
+                // Lock the mutex, other threads won't have access to it
+                let mut guard = n.lock().unwrap();
+
+                // Add 100 times to the value in it
+                for _ in 0..100 {
+                    *guard += 1;
+                }
+
+                // The mutex will only be unlocked after the current scope (here)
+            });
+        }
+    });
+    assert_eq!(n.into_inner().unwrap(), 1000);
 }
-
-// Structs with pointers are neither Sync nor Send
-struct OnlySyncAndSendIfImplemented {
-    _p: *mut i32,
-}
-
-// Send and Sync aren't safe to implement as it can't be checked by the compiler.
-// Variables that aren't Send can't be move across threads
-unsafe impl Send for OnlySyncAndSendIfImplemented {}
-unsafe impl Sync for OnlySyncAndSendIfImplemented {}
-
-fn main() {}
