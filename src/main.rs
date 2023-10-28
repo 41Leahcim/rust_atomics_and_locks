@@ -1,17 +1,29 @@
-use std::{sync::Arc, thread};
+use std::{fmt::Debug, ops::AddAssign};
 
 fn main() {
-    let a = Arc::new([1, 2, 3]);
+    let a = 0;
+    let mut b = 0;
+    f(&a, &mut b);
+}
 
-    let t1 = thread::spawn({
-        // Create a clone of Arc a with the same name, shadowing the original
-        let a = a.clone();
+fn x() {}
 
-        // move the clone to the new thread
-        move || dbg!(a)
-    });
+fn f<T: AddAssign<T> + PartialEq + Copy>(a: &T, b: &mut T)
+where
+    i32: TryInto<T>,
+    <i32 as std::convert::TryInto<T>>::Error: Debug,
+{
+    // Assign before the value of a
+    let before = *a;
 
-    // The original a is still available
-    dbg!(a);
-    t1.join().unwrap();
+    // Subtract 1 from the value of b
+    *b += 1.try_into().unwrap();
+
+    // Assign after the value of a
+    let after = *a;
+
+    // The value of a can't have changed because of the immutable reference and borrow checker
+    if before != after {
+        x();
+    }
 }
