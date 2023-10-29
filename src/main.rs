@@ -5,7 +5,9 @@ use std::{
 
 fn allocate_new_id() -> u32 {
     static NEXT_ID: AtomicU32 = AtomicU32::new(0);
-    NEXT_ID.fetch_add(1, Ordering::Relaxed)
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    assert!(id < 1000, "Too many IDs!");
+    id
 }
 
 fn main() {
