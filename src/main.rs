@@ -1,40 +1,39 @@
 use std::{
-    fmt::Debug,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicU64, Ordering},
     thread,
-    time::Duration,
 };
 
-fn process_item<T: Debug>(item: T) {
-    println!("{item:?}")
+fn calculate_x() -> u64 {
+    // Randomly generate a value >= 1
+    rand::random::<u64>().max(1)
+}
+
+fn get_x() -> u64 {
+    // Initialize an atomic u64 to 0
+    static X: AtomicU64 = AtomicU64::new(0);
+
+    // Load the value
+    let mut x = X.load(Ordering::Relaxed);
+
+    // Recalculate the value for x, if it is 0
+    if x == 0 {
+        x = calculate_x();
+        X.store(x, Ordering::Relaxed);
+    }
+
+    // Return the value
+    x
 }
 
 fn main() {
-    let num_done = AtomicUsize::new(0);
-    let main_thread = thread::current();
+    // Start 2 threads retrieving x
+    let t1 = thread::spawn(get_x);
+    let t2 = thread::spawn(get_x);
 
-    thread::scope(|s| {
-        // A background thread to process all 100 times
-        s.spawn(|| {
-            for i in 0..100 {
-                // Assuming this takes some time
-                process_item(i);
-                num_done.store(i + 1, Ordering::Relaxed);
-                // Wake up the main thread
-                main_thread.unpark();
-            }
-        });
+    // Panic if they aren't equal, which happens sometimes
+    // This can be solved with std::sync::Once or std::sync::OnceLock
+    assert_eq!(t1.join().unwrap(), t2.join().unwrap());
 
-        // The main thread shows status updates, every second.
-        loop {
-            let n = num_done.load(Ordering::Relaxed);
-            if n == 0 {
-                break;
-            }
-            println!("Working... {n}/100 done");
-            thread::park_timeout(Duration::from_secs(1));
-        }
-    });
-
-    println!("Done!");
+    // Print the value of x
+    println!("{}", get_x());
 }
