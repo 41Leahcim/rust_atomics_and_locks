@@ -1,32 +1,39 @@
 use std::{
-    sync::atomic::{AtomicU32, Ordering},
+    sync::atomic::{AtomicU64, Ordering},
     thread,
 };
 
-fn allocate_new_id() -> u32 {
-    static NEXT_ID: AtomicU32 = AtomicU32::new(0);
-    NEXT_ID
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
-        .expect("Too many IDs!")
+fn generate_random_key() -> u64 {
+    rand::random()
+}
+
+/// Using Once or OnceCell is better when keys take long to generate
+fn get_key() -> u64 {
+    static KEY: AtomicU64 = AtomicU64::new(0);
+    let key = KEY.load(Ordering::Relaxed);
+    if key == 0 {
+        let new_key = generate_random_key();
+        // Compare_exchange_weak shouldn't be used here
+        match KEY.compare_exchange(0, new_key, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => {
+                println!("{:?} generated the key", thread::current().id());
+                new_key
+            }
+            Err(k) => {
+                println!(
+                    "Another thread than {:?} generated a key after load",
+                    thread::current().id()
+                );
+                k
+            }
+        }
+    } else {
+        key
+    }
 }
 
 fn main() {
-    const MAX: usize = 1_001;
-    let mut threads = Vec::with_capacity(MAX);
-    for _ in 0..MAX {
-        threads.push(thread::spawn(allocate_new_id));
-        for i in (0..threads.len()).rev() {
-            if threads[i].is_finished() {
-                if let Ok(id) = threads.remove(i).join() {
-                    println!("{id}");
-                }
-            }
-        }
-    }
-
-    while let Some(thread) = threads.pop() {
-        if let Ok(id) = thread.join() {
-            println!("{id}");
-        }
-    }
+    let t1 = thread::spawn(get_key);
+    let t2 = thread::spawn(get_key);
+    assert_eq!(t1.join().unwrap(), t2.join().unwrap());
 }
