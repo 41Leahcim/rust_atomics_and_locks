@@ -11,6 +11,7 @@ fn process_item<T: Debug>(item: T) {
 
 fn main() {
     let num_done = AtomicUsize::new(0);
+    let main_thread = thread::current();
 
     thread::scope(|s| {
         // A background thread to process all 100 times
@@ -19,6 +20,8 @@ fn main() {
                 // Assuming this takes some time
                 process_item(i);
                 num_done.store(i + 1, Ordering::Relaxed);
+                // Wake up the main thread
+                main_thread.unpark();
             }
         });
 
@@ -29,7 +32,7 @@ fn main() {
                 break;
             }
             println!("Working... {n}/100 done");
-            thread::sleep(Duration::from_secs(1));
+            thread::park_timeout(Duration::from_secs(1));
         }
     });
 
