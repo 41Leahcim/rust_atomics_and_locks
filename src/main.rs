@@ -1,42 +1,32 @@
 use std::{
-    collections::VecDeque,
-    sync::{Condvar, Mutex},
+    sync::atomic::{AtomicBool, Ordering},
     thread,
-    time::Duration,
 };
 
+fn some_work() {}
+
 fn main() {
-    let queue = Mutex::new(VecDeque::new());
+    static STOP: AtomicBool = AtomicBool::new(false);
 
-    // This Condition Variable is needed to notify the thread an item is available
-    let not_empty = Condvar::new();
-
-    thread::scope(|s| {
-        // Consuming thread
-        s.spawn(|| loop {
-            let mut q = queue.lock().unwrap();
-            // Retrieve an item from the VecDeque
-            let item = loop {
-                // Return the item if available, otherwise wait for a new item
-                if let Some(item) = q.pop_front() {
-                    break item;
-                } else {
-                    q = not_empty.wait(q).unwrap();
-                }
-            };
-
-            // Drop the MutexGuard
-            drop(q);
-
-            // Print the item
-            dbg!(item);
-        });
-
-        // Producing thread
-        for i in 0.. {
-            queue.lock().unwrap().push_back(i);
-            not_empty.notify_one();
-            thread::sleep(Duration::from_secs(1));
+    // Spawn a thread to do the work.
+    let background_thread = thread::spawn(|| {
+        while !STOP.load(Ordering::Relaxed) {
+            some_work();
         }
-    })
+    });
+
+    // Use the main thread to listen for user input.
+    for line in std::io::stdin().lines() {
+        match line.unwrap().as_str() {
+            "help" => println!("Commands: help, stop"),
+            "stop" => break,
+            cmd => println!("Unknown command: {cmd:?}\nCommands: help, stop"),
+        }
+    }
+
+    // Inform the background thread, it needs to stop!
+    STOP.store(true, Ordering::Relaxed);
+
+    // Wait until the background thread finishes
+    background_thread.join().unwrap();
 }
