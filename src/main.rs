@@ -1,10 +1,39 @@
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::{
+    fmt::Debug,
+    sync::atomic::{AtomicUsize, Ordering},
+    thread,
+    time::Duration,
+};
+
+fn process_item<T: Debug>(item: T) {
+    println!("{item:?}")
+}
 
 fn main() {
-    let a = AtomicI32::new(100); // a = 100
-    let b = a.fetch_add(23, Ordering::Relaxed); // a = 123, b = 100
-    let c = a.load(Ordering::Relaxed); // a = 123, c = 123
+    let num_done = &AtomicUsize::new(0);
 
-    assert_eq!(b, 100);
-    assert_eq!(c, 123);
+    thread::scope(|s| {
+        // A background thread to process all 100 times
+        for t in 0..4 {
+            s.spawn(move || {
+                for i in t * 25..(t + 1) * 25 {
+                    // Assuming this takes some time
+                    process_item(i);
+                    num_done.fetch_add(1, Ordering::Relaxed);
+                }
+            });
+        }
+
+        // The main thread shows status updates, every second.
+        loop {
+            let n = num_done.load(Ordering::Relaxed);
+            if n == 100 {
+                break;
+            }
+            println!("Working... {n}/100 done");
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+
+    println!("Done!");
 }
