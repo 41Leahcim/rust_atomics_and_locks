@@ -1,26 +1,41 @@
-use std::{collections::VecDeque, sync::Mutex, thread, time::Duration};
+use std::{
+    collections::VecDeque,
+    sync::{Condvar, Mutex},
+    thread,
+    time::Duration,
+};
 
 fn main() {
     let queue = Mutex::new(VecDeque::new());
 
+    // This Condition Variable is needed to notify the thread an item is available
+    let not_empty = Condvar::new();
+
     thread::scope(|s| {
         // Consuming thread
-        let t = s.spawn(|| loop {
-            // Try to retrieve an item from the VecDeque
-            let item = queue.lock().unwrap().pop_front();
+        s.spawn(|| loop {
+            let mut q = queue.lock().unwrap();
+            // Retrieve an item from the VecDeque
+            let item = loop {
+                // Return the item if available, otherwise wait for a new item
+                if let Some(item) = q.pop_front() {
+                    break item;
+                } else {
+                    q = not_empty.wait(q).unwrap();
+                }
+            };
 
-            // Print it if something was returned, park otherwise
-            if let Some(item) = item {
-                dbg!(item);
-            } else {
-                thread::park();
-            }
+            // Drop the MutexGuard
+            drop(q);
+
+            // Print the item
+            dbg!(item);
         });
 
         // Producing thread
         for i in 0.. {
             queue.lock().unwrap().push_back(i);
-            t.thread().unpark();
+            not_empty.notify_one();
             thread::sleep(Duration::from_secs(1));
         }
     })
