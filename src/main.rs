@@ -3,33 +3,35 @@ use std::{
     thread,
 };
 
-fn increment(a: &AtomicU32) {
-    let mut current = a.load(Ordering::Relaxed);
+fn allocate_new_id() -> u32 {
+    static NEXT_ID: AtomicU32 = AtomicU32::new(0);
+    let mut id = NEXT_ID.load(Ordering::Relaxed);
     loop {
-        let new = current + 1;
-        // Compare_exchange could be replaced by compare_exchange_weak for better performance
-        match a.compare_exchange(current, new, Ordering::Relaxed, Ordering::Relaxed) {
-            Ok(_) => return,
-            Err(v) => current = v,
+        assert!(id < 1000, "Too many IDs!");
+        match NEXT_ID.compare_exchange_weak(id, id + 1, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return id,
+            Err(v) => id = v,
         }
     }
 }
 
 fn main() {
-    let value = AtomicU32::new(0);
-    thread::scope(|s| {
-        const MAX: usize = 1_000_000;
-        let mut threads = Vec::with_capacity(MAX);
-        let mut max_length = 0;
-        for _ in 0..MAX {
-            threads.push(s.spawn(|| increment(&value)));
-            max_length = max_length.max(threads.len());
-            for i in (0..threads.len()).rev() {
-                if threads[i].is_finished() && threads.remove(i).join().is_ok() {
-                    println!("{}", value.load(Ordering::Relaxed));
+    const MAX: usize = 1_001;
+    let mut threads = Vec::with_capacity(MAX);
+    for _ in 0..MAX {
+        threads.push(thread::spawn(allocate_new_id));
+        for i in (0..threads.len()).rev() {
+            if threads[i].is_finished() {
+                if let Ok(id) = threads.remove(i).join() {
+                    println!("{id}");
                 }
             }
         }
-        println!("{max_length}");
-    });
+    }
+
+    while let Some(thread) = threads.pop() {
+        if let Ok(id) = thread.join() {
+            println!("{id}");
+        }
+    }
 }
