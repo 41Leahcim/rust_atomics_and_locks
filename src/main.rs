@@ -5,14 +5,9 @@ use std::{
 
 fn allocate_new_id() -> u32 {
     static NEXT_ID: AtomicU32 = AtomicU32::new(0);
-    let mut id = NEXT_ID.load(Ordering::Relaxed);
-    loop {
-        assert!(id < 1000, "Too many IDs!");
-        match NEXT_ID.compare_exchange_weak(id, id + 1, Ordering::Relaxed, Ordering::Relaxed) {
-            Ok(_) => return id,
-            Err(v) => id = v,
-        }
-    }
+    NEXT_ID
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+        .expect("Too many IDs!")
 }
 
 fn main() {
