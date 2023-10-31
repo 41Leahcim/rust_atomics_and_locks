@@ -1,24 +1,33 @@
-use std::sync::atomic::Ordering;
+use std::{
+    sync::atomic::{AtomicI32, Ordering},
+    thread,
+};
 
-fn is_relaxed(ordering: Ordering) -> bool {
-    ordering == Ordering::Relaxed // I don't care what happens first
+static X: AtomicI32 = AtomicI32::new(0);
+static Y: AtomicI32 = AtomicI32::new(0);
+
+/// May happen before b
+fn a() {
+    X.store(10, Ordering::Relaxed); // happens first
+
+    // happens next, may appear to happen first from the other thread
+    Y.store(20, Ordering::Relaxed);
 }
 
-fn is_release_and_acquire(ordering: Ordering) -> bool {
-    matches!(
-        ordering,
-        Ordering::Release| // Release before acquire
-         Ordering::Acquire | // Acquire before release
-         Ordering::AcqRel // Acquire first for loads, release first for stores
-    )
+/// May happen before a
+fn b() {
+    let y = Y.load(Ordering::Relaxed); // happens first
+    let x = X.load(Ordering::Relaxed); // happens next
+    println!("{x} {y}"); // when done
 }
 
-fn is_sequentially_consistent(ordering: Ordering) -> bool {
-    ordering == Ordering::SeqCst // Execute operations in the order it's written
+fn main() {
+    for _ in 0..20 {
+        let threads = [thread::spawn(a), thread::spawn(b)];
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        X.store(0, Ordering::Relaxed);
+        Y.store(20, Ordering::Relaxed);
+    }
 }
-
-fn is_consume_ordering(_: Ordering) -> bool {
-    false // Not available in Rust, but it does exist in C++
-}
-
-fn main() {}
