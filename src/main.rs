@@ -5,19 +5,37 @@ use std::{
 
 static X: AtomicI32 = AtomicI32::new(0);
 
-fn main() {
-    for _ in 0..100_000 {
-        X.store(1, Ordering::Relaxed);
-        let t = thread::spawn(f);
-        X.store(2, Ordering::Relaxed); // f might load this value
-        t.join().unwrap();
-
-        // Won't cause panics in f
-        X.store(3, Ordering::Relaxed);
-    }
+fn a() {
+    X.fetch_add(5, Ordering::Relaxed);
+    X.fetch_add(10, Ordering::Relaxed);
 }
 
-fn f() {
-    let x = X.load(Ordering::Relaxed);
-    assert!(x == 1 || x == 2);
+fn a1() {
+    X.fetch_add(5, Ordering::Relaxed);
+}
+
+fn a2() {
+    X.fetch_add(10, Ordering::Relaxed);
+}
+
+fn b() {
+    let a = X.load(Ordering::Relaxed);
+    let b = X.load(Ordering::Relaxed);
+    let c = X.load(Ordering::Relaxed);
+    let d = X.load(Ordering::Relaxed);
+    println!("{a} {b} {c} {d}");
+}
+
+fn main() {
+    for _ in 0..20 {
+        let threads = [
+            thread::spawn(a),
+            thread::spawn(b),
+            thread::spawn(a1),
+            thread::spawn(a2),
+        ];
+        for thread in threads.into_iter().rev() {
+            thread.join().unwrap();
+        }
+    }
 }
