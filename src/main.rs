@@ -4,30 +4,20 @@ use std::{
 };
 
 static X: AtomicI32 = AtomicI32::new(0);
-static Y: AtomicI32 = AtomicI32::new(0);
-
-/// May happen before b
-fn a() {
-    X.store(10, Ordering::Relaxed); // happens first
-
-    // happens next, may appear to happen first from the other thread
-    Y.store(20, Ordering::Relaxed);
-}
-
-/// May happen before a
-fn b() {
-    let y = Y.load(Ordering::Relaxed); // happens first
-    let x = X.load(Ordering::Relaxed); // happens next
-    println!("{x} {y}"); // when done
-}
 
 fn main() {
-    for _ in 0..20 {
-        let threads = [thread::spawn(a), thread::spawn(b)];
-        for thread in threads {
-            thread.join().unwrap();
-        }
-        X.store(0, Ordering::Relaxed);
-        Y.store(20, Ordering::Relaxed);
+    for _ in 0..100_000 {
+        X.store(1, Ordering::Relaxed);
+        let t = thread::spawn(f);
+        X.store(2, Ordering::Relaxed); // f might load this value
+        t.join().unwrap();
+
+        // Won't cause panics in f
+        X.store(3, Ordering::Relaxed);
     }
+}
+
+fn f() {
+    let x = X.load(Ordering::Relaxed);
+    assert!(x == 1 || x == 2);
 }
