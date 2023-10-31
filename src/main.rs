@@ -1,39 +1,22 @@
-use std::{
-    sync::atomic::{AtomicU64, Ordering},
-    thread,
-};
-
-fn generate_random_key() -> u64 {
-    rand::random()
+fn programmer_wrote(a: &mut i32, b: &mut i32) {
+    *a += 1;
+    *b += 1;
+    *a += 1;
 }
 
-/// Using Once or OnceCell is better when keys take long to generate
-fn get_key() -> u64 {
-    static KEY: AtomicU64 = AtomicU64::new(0);
-    let key = KEY.load(Ordering::Relaxed);
-    if key == 0 {
-        let new_key = generate_random_key();
-        // Compare_exchange_weak shouldn't be used here
-        match KEY.compare_exchange(0, new_key, Ordering::Relaxed, Ordering::Relaxed) {
-            Ok(_) => {
-                println!("{:?} generated the key", thread::current().id());
-                new_key
-            }
-            Err(k) => {
-                println!(
-                    "Another thread than {:?} generated a key after load",
-                    thread::current().id()
-                );
-                k
-            }
-        }
-    } else {
-        key
-    }
+fn may_be_optimized_to(a: &mut i32, b: &mut i32) {
+    *a += 2;
+    *b += 1;
 }
 
 fn main() {
-    let t1 = thread::spawn(get_key);
-    let t2 = thread::spawn(get_key);
-    assert_eq!(t1.join().unwrap(), t2.join().unwrap());
+    let mut a = 0;
+    let mut b = 0;
+    programmer_wrote(&mut a, &mut b);
+    let first_results = (a, b);
+    a = 0;
+    b = 0;
+    may_be_optimized_to(&mut a, &mut b);
+    let second_results = (a, b);
+    assert_eq!(first_results, second_results);
 }
