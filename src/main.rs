@@ -1,20 +1,22 @@
 use std::{
-    sync::atomic::{AtomicI32, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     thread,
+    time::Duration,
 };
 
-static X: AtomicI32 = AtomicI32::new(0);
-static Y: AtomicI32 = AtomicI32::new(0);
+static DATA: AtomicU64 = AtomicU64::new(0);
+static READY: AtomicBool = AtomicBool::new(false);
 
 fn main() {
-    loop {
-        [
-            thread::spawn(|| Y.store(X.load(Ordering::Relaxed), Ordering::Relaxed)),
-            thread::spawn(|| X.store(Y.load(Ordering::Relaxed), Ordering::Relaxed)),
-        ]
-        .into_iter()
-        .for_each(|thread| thread.join().unwrap());
-        assert_eq!(X.load(Ordering::Relaxed), 0); // Might fail?
-        assert_eq!(Y.load(Ordering::Relaxed), 0); // Might fail?
+    thread::spawn(|| {
+        DATA.store(123, Ordering::Relaxed);
+        READY.store(true, Ordering::Release); // Everything from before this store ..
+    });
+
+    // .. is visible after this loads `true`.
+    while !READY.load(Ordering::Acquire) {
+        thread::sleep(Duration::from_millis(100));
+        println!("Waiting...");
     }
+    println!("{}", DATA.load(Ordering::Relaxed));
 }
