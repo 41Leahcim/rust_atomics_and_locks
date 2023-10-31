@@ -1,22 +1,24 @@
-fn programmer_wrote(a: &mut i32, b: &mut i32) {
-    *a += 1;
-    *b += 1;
-    *a += 1;
+use std::sync::atomic::Ordering;
+
+fn is_relaxed(ordering: Ordering) -> bool {
+    ordering == Ordering::Relaxed // I don't care what happens first
 }
 
-fn may_be_optimized_to(a: &mut i32, b: &mut i32) {
-    *a += 2;
-    *b += 1;
+fn is_release_and_acquire(ordering: Ordering) -> bool {
+    matches!(
+        ordering,
+        Ordering::Release| // Release before acquire
+         Ordering::Acquire | // Acquire before release
+         Ordering::AcqRel // Acquire first for loads, release first for stores
+    )
 }
 
-fn main() {
-    let mut a = 0;
-    let mut b = 0;
-    programmer_wrote(&mut a, &mut b);
-    let first_results = (a, b);
-    a = 0;
-    b = 0;
-    may_be_optimized_to(&mut a, &mut b);
-    let second_results = (a, b);
-    assert_eq!(first_results, second_results);
+fn is_sequentially_consistent(ordering: Ordering) -> bool {
+    ordering == Ordering::SeqCst // Execute operations in the order it's written
 }
+
+fn is_consume_ordering(_: Ordering) -> bool {
+    false // Not available in Rust, but it does exist in C++
+}
+
+fn main() {}
