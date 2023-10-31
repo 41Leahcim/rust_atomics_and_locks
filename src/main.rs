@@ -4,38 +4,17 @@ use std::{
 };
 
 static X: AtomicI32 = AtomicI32::new(0);
-
-fn a() {
-    X.fetch_add(5, Ordering::Relaxed);
-    X.fetch_add(10, Ordering::Relaxed);
-}
-
-fn a1() {
-    X.fetch_add(5, Ordering::Relaxed);
-}
-
-fn a2() {
-    X.fetch_add(10, Ordering::Relaxed);
-}
-
-fn b() {
-    let a = X.load(Ordering::Relaxed);
-    let b = X.load(Ordering::Relaxed);
-    let c = X.load(Ordering::Relaxed);
-    let d = X.load(Ordering::Relaxed);
-    println!("{a} {b} {c} {d}");
-}
+static Y: AtomicI32 = AtomicI32::new(0);
 
 fn main() {
-    for _ in 0..20 {
-        let threads = [
-            thread::spawn(a),
-            thread::spawn(b),
-            thread::spawn(a1),
-            thread::spawn(a2),
-        ];
-        for thread in threads.into_iter().rev() {
-            thread.join().unwrap();
-        }
+    loop {
+        [
+            thread::spawn(|| Y.store(X.load(Ordering::Relaxed), Ordering::Relaxed)),
+            thread::spawn(|| X.store(Y.load(Ordering::Relaxed), Ordering::Relaxed)),
+        ]
+        .into_iter()
+        .for_each(|thread| thread.join().unwrap());
+        assert_eq!(X.load(Ordering::Relaxed), 0); // Might fail?
+        assert_eq!(Y.load(Ordering::Relaxed), 0); // Might fail?
     }
 }
