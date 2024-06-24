@@ -45,7 +45,7 @@ fn main() {
     thread::scope(|s| {
         for _ in 0..100 {
             s.spawn(f);
-            get_data();
+            s.spawn(get_data);
         }
     });
     unsafe { println!("{} {}", DATA, DATA.len()) };
