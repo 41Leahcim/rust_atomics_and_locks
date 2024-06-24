@@ -1,28 +1,28 @@
-use core::sync::atomic::{fence, AtomicU16, AtomicU32, AtomicU8, Ordering};
-use std::thread;
+use core::sync::atomic::{fence, Ordering};
+use std::{sync::atomic::AtomicBool, thread, time::Duration};
 
-static A: AtomicU8 = AtomicU8::new(0);
-static B: AtomicU16 = AtomicU16::new(0);
-static C: AtomicU32 = AtomicU32::new(0);
+static mut DATA: [u64; 10] = [0; 10];
+static READY: [AtomicBool; 10] = [const{AtomicBool::new(false)}; 10];
 
-fn releasing() {
-    fence(Ordering::Release);
-    A.store(1, Ordering::Relaxed);
-    B.store(2, Ordering::Relaxed);
-    C.store(3, Ordering::Relaxed);
-}
-
-fn acquiring() {
-    let a = A.load(Ordering::Relaxed);
-    let b = B.load(Ordering::Relaxed);
-    let c = C.load(Ordering::Relaxed);
-    fence(Ordering::Acquire);
-    println!("{a}, {b}, {c}");
+const fn some_calculation<T>(value: T) -> T {
+    value
 }
 
 fn main() {
-    thread::scope(|s| {
-        s.spawn(releasing);
-        s.spawn(acquiring);
-    });
+    for i in 0..READY.len() {
+        thread::spawn(move || {
+            let data = some_calculation(i as u64);
+            unsafe { DATA[i] = data };
+            READY[i].store(true, Ordering::Release);
+        });
+    }
+    thread::sleep(Duration::from_millis(500));
+    
+    fence(Ordering::Acquire);
+    for value in unsafe { DATA.iter() }
+        .zip(READY.iter().map(|ready| ready.load(Ordering::Relaxed)))
+        .filter_map(|(value, is_ready)| is_ready.then_some(*value))
+    {
+        println!("{value}");
+    }
 }
