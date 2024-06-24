@@ -1,28 +1,25 @@
-use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    thread,
-    time::Duration,
-};
+use core::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 
-/// # Safety
-/// Only one thread is accessing DATA at a time, because it's only writte to
-/// once before and only read after setting the ready flag.
-static mut DATA: u64 = 0;
-static READY: AtomicBool = AtomicBool::new(false);
+static mut DATA: String = String::new();
+static LOCKED: AtomicBool = AtomicBool::new(false);
+
+fn f() {
+    if LOCKED
+        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .is_ok()
+    {
+        // Safety: We hold the exclusive lock, so nothing else is accessing DATA.
+        unsafe { DATA.push('!') };
+        LOCKED.store(false, Ordering::Release);
+    }
+}
 
 fn main() {
-    thread::spawn(|| {
-        // Nothing else is accessing DATA, because the READY flag hasn't been set yet
-        unsafe { DATA = 123 };
-        READY.store(true, Ordering::Release); // Everything from before this store ..
+    thread::scope(|s| {
+        for _ in 0..100 {
+            s.spawn(f);
+        }
     });
-
-    // .. is visible after this loads `true`.
-    while !READY.load(Ordering::Acquire) {
-        thread::sleep(Duration::from_millis(100));
-        println!("Waiting...");
-    }
-
-    // Nothing is mutating DATA, because READY is set
-    println!("{}", unsafe { DATA });
+    unsafe { println!("{} {}", DATA, DATA.len()) };
 }
