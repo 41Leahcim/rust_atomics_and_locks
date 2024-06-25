@@ -1,28 +1,19 @@
-use core::sync::atomic::{fence, Ordering};
-use std::{sync::atomic::AtomicBool, thread, time::Duration};
+use std::thread;
 
-static mut DATA: [u64; 10] = [0; 10];
-static READY: [AtomicBool; 10] = [const{AtomicBool::new(false)}; 10];
+use spinlock::SpinLock;
 
-const fn some_calculation<T>(value: T) -> T {
-    value
-}
+mod spinlock;
 
 fn main() {
-    for i in 0..READY.len() {
-        thread::spawn(move || {
-            let data = some_calculation(i as u64);
-            unsafe { DATA[i] = data };
-            READY[i].store(true, Ordering::Release);
+    let values = SpinLock::new(Vec::new());
+    thread::scope(|scope|{
+        scope.spawn(|| values.lock().push(1));
+        scope.spawn(||{
+            let mut guard = values.lock();
+            guard.push(2);
+            guard.push(2);
         });
-    }
-    thread::sleep(Duration::from_millis(500));
-    
-    fence(Ordering::Acquire);
-    for value in unsafe { DATA.iter() }
-        .zip(READY.iter().map(|ready| ready.load(Ordering::Relaxed)))
-        .filter_map(|(value, is_ready)| is_ready.then_some(*value))
-    {
-        println!("{value}");
-    }
+    });
+    let g = values.lock();
+    assert!(matches!(g.as_slice(), [1, 2, 2] | [2, 2, 1]));
 }
