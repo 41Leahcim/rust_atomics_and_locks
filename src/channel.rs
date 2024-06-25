@@ -31,6 +31,7 @@ impl<T> Channel<T> {
 
     /// Safety: Only use this once after `is_ready()` returns true!
     pub unsafe fn receive(&self) -> T {
+        assert!(self.is_ready(), "No message available!");
         (*self.message.get()).assume_init_read()
     }
 }
