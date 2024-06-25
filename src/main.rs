@@ -1,5 +1,5 @@
 use channel::Channel;
-use std::{sync::Arc, thread};
+use std::{hint::spin_loop, sync::Arc, thread};
 
 mod channel;
 
@@ -9,13 +9,12 @@ fn main() {
         scope.spawn({
             let channel = channel.clone();
             move || {
-                for i in 0..10 {
-                    channel.send(i);
-                }
+                unsafe { channel.send(1) };
             }
         });
-        for _ in 0..10 {
-            println!("{}", channel.receive());
+        while !channel.is_ready() {
+            spin_loop();
         }
+        println!("{}", unsafe { channel.receive() });
     })
 }
