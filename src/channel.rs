@@ -1,55 +1,43 @@
 use std::{
     cell::UnsafeCell,
     mem::MaybeUninit,
-    sync::atomic::{AtomicU8, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
-const EMPTY: u8 = 0;
-const WRITING: u8 = 1;
-const READY: u8 = 2;
-const READING: u8 = 3;
-
-pub struct Channel<T> {
+struct Channel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
-    state: AtomicU8,
+    ready: AtomicBool,
 }
 
 unsafe impl<T: Send> Sync for Channel<T> {}
 
 impl<T> Channel<T> {
-    pub const fn new() -> Self {
+    const fn new() -> Self {
         Self {
             message: UnsafeCell::new(MaybeUninit::uninit()),
-            state: AtomicU8::new(EMPTY),
+            ready: AtomicBool::new(false),
         }
     }
 
-    /// # Panics
-    /// When trying to send more than one message.
-    pub fn send(&self, message: T) {
-        assert!(
-            self.state
-                .compare_exchange(EMPTY, WRITING, Ordering::Relaxed, Ordering::Relaxed)
-                .is_ok(),
-            "Can't send more than one message!"
-        );
+    fn send(&self, message: T) {
         unsafe { (*self.message.get()).write(message) };
-        self.state.store(READY, Ordering::Release);
+        self.ready.store(true, Ordering::Release);
     }
 
-    pub fn is_ready(&self) -> bool {
-        self.state.load(Ordering::Relaxed) == READY
+    fn is_ready(&self) -> bool {
+        self.ready.load(Ordering::Relaxed)
     }
 
     /// # Panics
     /// If no message is available yet, or if the message was already consumed.
     ///
     /// Tip: Use `is_ready` to check first.
-    pub fn receive(&self) -> T {
+    fn receive(&self) -> T {
         assert!(
-            self.state
-                .compare_exchange(READY, READING, Ordering::Acquire, Ordering::Relaxed)
-                .is_ok(),
+            self.ready.swap(false, Ordering::Acquire),
             "No message available!"
         );
 
@@ -60,8 +48,37 @@ impl<T> Channel<T> {
 
 impl<T> Drop for Channel<T> {
     fn drop(&mut self) {
-        if *self.state.get_mut() == READY {
+        if *self.ready.get_mut() {
             unsafe { self.message.get_mut().assume_init_drop() };
         }
     }
+}
+
+pub struct Sender<T>(Arc<Channel<T>>);
+
+impl<T> Sender<T> {
+    pub fn send(self, message: T) {
+        self.0.send(message);
+    }
+}
+
+pub struct Receiver<T>(Arc<Channel<T>>);
+
+impl<T> Receiver<T> {
+    pub fn is_ready(&self) -> bool {
+        self.0.is_ready()
+    }
+
+    /// # Panics
+    /// If no message is available yet, or if the message was already consumed.
+    ///
+    /// Tip: Use `is_ready` to check first.
+    pub fn receive(self) -> T {
+        self.0.receive()
+    }
+}
+
+pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
+    let channel = Arc::new(Channel::new());
+    (Sender(channel.clone()), Receiver(channel))
 }

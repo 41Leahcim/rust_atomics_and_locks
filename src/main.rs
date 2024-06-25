@@ -1,5 +1,5 @@
-use channel::Channel;
-use std::{sync::Arc, thread};
+use channel::channel;
+use std::thread;
 
 mod channel;
 
@@ -7,18 +7,15 @@ const MESSAGE: &str = "Hello, world!";
 
 fn main() {
     thread::scope(|scope| {
-        let channel = Arc::new(Channel::new());
+        let (sender, receiver) = channel();
         let current_thread = thread::current();
-        scope.spawn({
-            let channel = channel.clone();
-            move || {
-                channel.send(MESSAGE);
-                current_thread.unpark();
-            }
+        scope.spawn(move || {
+            sender.send(MESSAGE);
+            current_thread.unpark();
         });
-        while !channel.is_ready() {
+        while !receiver.is_ready() {
             thread::park();
         }
-        assert_eq!(channel.receive(), MESSAGE);
+        assert_eq!(receiver.receive(), MESSAGE);
     })
 }
