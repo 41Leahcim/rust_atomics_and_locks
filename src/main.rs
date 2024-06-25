@@ -9,7 +9,7 @@ fn main() {
         scope.spawn({
             let channel = channel.clone();
             move || {
-                unsafe { channel.send(1) };
+                channel.send(1);
             }
         });
         while !channel.is_ready() {
