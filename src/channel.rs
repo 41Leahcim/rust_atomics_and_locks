@@ -1,13 +1,10 @@
 use std::{
     cell::UnsafeCell,
     mem::MaybeUninit,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
-struct Channel<T> {
+pub struct Channel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
     ready: AtomicBool,
 }
@@ -15,11 +12,16 @@ struct Channel<T> {
 unsafe impl<T: Send> Sync for Channel<T> {}
 
 impl<T> Channel<T> {
-    const fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             message: UnsafeCell::new(MaybeUninit::uninit()),
             ready: AtomicBool::new(false),
         }
+    }
+
+    pub fn split(&mut self) -> (Sender<'_, T>, Receiver<'_, T>) {
+        *self = Self::new();
+        (Sender(self), Receiver(self))
     }
 
     fn send(&self, message: T) {
@@ -54,17 +56,17 @@ impl<T> Drop for Channel<T> {
     }
 }
 
-pub struct Sender<T>(Arc<Channel<T>>);
+pub struct Sender<'sender, T>(&'sender Channel<T>);
 
-impl<T> Sender<T> {
+impl<T> Sender<'_, T> {
     pub fn send(self, message: T) {
         self.0.send(message);
     }
 }
 
-pub struct Receiver<T>(Arc<Channel<T>>);
+pub struct Receiver<'receiver, T>(&'receiver Channel<T>);
 
-impl<T> Receiver<T> {
+impl<T> Receiver<'_, T> {
     pub fn is_ready(&self) -> bool {
         self.0.is_ready()
     }
@@ -76,9 +78,4 @@ impl<T> Receiver<T> {
     pub fn receive(self) -> T {
         self.0.receive()
     }
-}
-
-pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
-    let channel = Arc::new(Channel::new());
-    (Sender(channel.clone()), Receiver(channel))
 }
