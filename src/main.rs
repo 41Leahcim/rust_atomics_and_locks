@@ -1,19 +1,21 @@
-use std::thread;
+use channel::Channel;
+use std::{sync::Arc, thread};
 
-use spinlock::SpinLock;
-
-mod spinlock;
+mod channel;
 
 fn main() {
-    let values = SpinLock::new(Vec::new());
-    thread::scope(|scope|{
-        scope.spawn(|| values.lock().push(1));
-        scope.spawn(||{
-            let mut guard = values.lock();
-            guard.push(2);
-            guard.push(2);
+    thread::scope(|scope| {
+        let channel = Arc::new(Channel::new());
+        scope.spawn({
+            let channel = channel.clone();
+            move || {
+                for i in 0..10 {
+                    channel.send(i);
+                }
+            }
         });
-    });
-    let g = values.lock();
-    assert!(matches!(g.as_slice(), [1, 2, 2] | [2, 2, 1]));
+        for _ in 0..10 {
+            println!("{}", channel.receive());
+        }
+    })
 }
