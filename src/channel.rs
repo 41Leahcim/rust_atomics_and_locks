@@ -1,7 +1,9 @@
 use std::{
     cell::UnsafeCell,
+    marker::PhantomData,
     mem::MaybeUninit,
     sync::atomic::{AtomicBool, Ordering},
+    thread::{self, Thread},
 };
 
 pub struct Channel<T> {
@@ -21,7 +23,16 @@ impl<T> Channel<T> {
 
     pub fn split(&mut self) -> (Sender<'_, T>, Receiver<'_, T>) {
         *self = Self::new();
-        (Sender(self), Receiver(self))
+        (
+            Sender {
+                channel: self,
+                receiving_thread: thread::current(),
+            },
+            Receiver {
+                channel: self,
+                _no_send: PhantomData,
+            },
+        )
     }
 
     fn send(&self, message: T) {
@@ -33,15 +44,10 @@ impl<T> Channel<T> {
         self.ready.load(Ordering::Relaxed)
     }
 
-    /// # Panics
-    /// If no message is available yet, or if the message was already consumed.
-    ///
-    /// Tip: Use `is_ready` to check first.
     fn receive(&self) -> T {
-        assert!(
-            self.ready.swap(false, Ordering::Acquire),
-            "No message available!"
-        );
+        while !self.ready.swap(false, Ordering::Acquire) {
+            thread::park();
+        }
 
         // Safety: We've just checked (and reset) the ready flag
         unsafe { (*self.message.get()).assume_init_read() }
@@ -56,19 +62,26 @@ impl<T> Drop for Channel<T> {
     }
 }
 
-pub struct Sender<'sender, T>(&'sender Channel<T>);
+pub struct Sender<'sender, T> {
+    channel: &'sender Channel<T>,
+    receiving_thread: Thread,
+}
 
 impl<T> Sender<'_, T> {
     pub fn send(self, message: T) {
-        self.0.send(message);
+        self.channel.send(message);
+        self.receiving_thread.unpark()
     }
 }
 
-pub struct Receiver<'receiver, T>(&'receiver Channel<T>);
+pub struct Receiver<'receiver, T> {
+    channel: &'receiver Channel<T>,
+    _no_send: PhantomData<*const ()>,
+}
 
 impl<T> Receiver<'_, T> {
     pub fn is_ready(&self) -> bool {
-        self.0.is_ready()
+        self.channel.is_ready()
     }
 
     /// # Panics
@@ -76,6 +89,6 @@ impl<T> Receiver<'_, T> {
     ///
     /// Tip: Use `is_ready` to check first.
     pub fn receive(self) -> T {
-        self.0.receive()
+        self.channel.receive()
     }
 }
