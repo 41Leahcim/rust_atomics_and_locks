@@ -15,6 +15,6 @@ fn main() {
         while !channel.is_ready() {
             spin_loop();
         }
-        println!("{}", unsafe { channel.receive() });
+        println!("{}", channel.receive());
     })
 }

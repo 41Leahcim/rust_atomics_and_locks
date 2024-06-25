@@ -26,12 +26,20 @@ impl<T> Channel<T> {
     }
 
     pub fn is_ready(&self) -> bool {
-        self.ready.load(Ordering::Acquire)
+        self.ready.load(Ordering::Relaxed)
     }
 
-    /// Safety: Only use this once after `is_ready()` returns true!
-    pub unsafe fn receive(&self) -> T {
-        assert!(self.is_ready(), "No message available!");
-        (*self.message.get()).assume_init_read()
+    /// # Panics
+    /// If no message is available yet, or if the message was already consumed.
+    ///
+    /// Tip: Use `is_ready` to check first.
+    pub fn receive(&self) -> T {
+        assert!(
+            self.ready.swap(false, Ordering::Acquire),
+            "No message available!"
+        );
+
+        // Safety: We've just checked (and reset) the ready flag
+        unsafe { (*self.message.get()).assume_init_read() }
     }
 }
