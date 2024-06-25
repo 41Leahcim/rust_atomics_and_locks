@@ -1,20 +1,24 @@
 use channel::Channel;
-use std::{hint::spin_loop, sync::Arc, thread};
+use std::{sync::Arc, thread};
 
 mod channel;
+
+const MESSAGE: &str = "Hello, world!";
 
 fn main() {
     thread::scope(|scope| {
         let channel = Arc::new(Channel::new());
+        let current_thread = thread::current();
         scope.spawn({
             let channel = channel.clone();
             move || {
-                channel.send(1);
+                channel.send(MESSAGE);
+                current_thread.unpark();
             }
         });
         while !channel.is_ready() {
-            spin_loop();
+            thread::park();
         }
-        println!("{}", channel.receive());
+        assert_eq!(channel.receive(), MESSAGE);
     })
 }
