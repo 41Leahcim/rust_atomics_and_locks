@@ -1,35 +1,54 @@
 use std::{
-    hint::spin_loop,
-    sync::atomic::{compiler_fence, AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicU32, Ordering},
     thread,
+    time::Duration,
 };
 
+#[cfg(not(target_os = "linux"))]
+compile_error!("Linux only!");
+
+pub fn wait(a: &AtomicU32, expected: u32) {
+    // Refer to the futex (2) man page for the syscall signature
+    unsafe {
+        libc::syscall(
+            libc::SYS_futex,                     // The futex syscall.
+            a as *const AtomicU32,               // The atomic to operate on
+            libc::FUTEX_WAIT,                    // Futex operation
+            expected,                            // Expected value
+            core::ptr::null::<libc::timespec>(), // No timeout
+        );
+    }
+}
+
+pub fn wake_one(a: &AtomicU32) {
+    // Refer to the futex (2) man page for the syscall signature
+    unsafe {
+        libc::syscall(
+            libc::SYS_futex,       // The futex syscall.
+            a as *const AtomicU32, // The atomic to operate on
+            libc::FUTEX_WAKE,      // Futex operation
+            1,                     // The number of threads to wake up
+        );
+    }
+}
+
 fn main() {
-    let locked = AtomicBool::new(false);
-    let counter = AtomicUsize::new(0);
+    let futex = AtomicU32::new(0);
     thread::scope(|scope| {
-        // Spawn four threads, that each iterate a million times.
-        for _ in 0..4 {
-            scope.spawn(|| {
-                for _ in 0..1_000_000 {
-                    // Acquire the lock using the wrong memory order
-                    while locked.swap(true, Ordering::Relaxed) {
-                        spin_loop();
-                    }
-                    compiler_fence(Ordering::Acquire);
+        scope.spawn(|| {
+            thread::sleep(Duration::from_secs(3));
 
-                    // Non-tatomically increment the counter, while holding the lock.
-                    let old = counter.load(Ordering::Relaxed);
-                    let new = old + 1;
-                    counter.store(new, Ordering::Relaxed);
-
-                    // Release the lock, using the wrong memory ordering
-                    compiler_fence(Ordering::Release);
-                    locked.store(false, Ordering::Relaxed);
-                }
-            });
+            // Stores 1 in the futex atomic
+            futex.store(1, Ordering::Relaxed);
+            wake_one(&futex);
+        });
+        println!("Waiting...");
+        // Wait for the futex atomic to change from 0 to another value
+        while futex.load(Ordering::Relaxed) == 0 {
+            // Sleep while the  futex atomic doesn't change
+            wait(&futex, 0);
         }
+        // The futex variable has changed, print a message
+        println!("Done!");
     });
-
-    println!("{}", counter.into_inner());
 }
